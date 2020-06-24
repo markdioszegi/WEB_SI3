@@ -58,9 +58,7 @@ function onPostsReceived() {
     const posts = JSON.parse(text);
 
     const divEl = document.getElementById('posts-content');
-    while (divEl.firstChild) {
-        divEl.removeChild(divEl.firstChild);
-    }
+    removePostsContent(divEl);
     divEl.appendChild(createPostsList(posts));
 }
 
@@ -70,6 +68,7 @@ function onLoadPosts() {
 
     //remove active from everything first
     const buttonElements = document.querySelectorAll("[data-user-id]");
+    //const buttonElements = document.querySelectorAll("button");
     buttonElements.forEach(button => {
         if (button != el) {
             button.classList.remove("active");
@@ -116,18 +115,31 @@ function createUsersTableBody(users) {
         const dataUserIdAttr = document.createAttribute('data-user-id');
         dataUserIdAttr.value = user.id;
 
+        //create data-album-user-id
+        const dataAlbumUserIdAttr = document.createAttribute('data-album-user-id');
+        dataAlbumUserIdAttr.value = user.id;
+
         const buttonEl = document.createElement('button');
         buttonEl.textContent = user.name;
         buttonEl.setAttributeNode(dataUserIdAttr);
         buttonEl.addEventListener('click', onLoadPosts);
 
+        const buttonAlbumEl = document.createElement('button');
+        buttonAlbumEl.textContent = "Show albums";
+        buttonAlbumEl.setAttributeNode(dataAlbumUserIdAttr);
+        buttonAlbumEl.addEventListener('click', onLoadAlbums);   //create album button
+
         const nameTdEl = document.createElement('td');
         nameTdEl.appendChild(buttonEl);
+
+        const albumTdEl = document.createElement('td');
+        albumTdEl.appendChild(buttonAlbumEl);   //create and append album td el
 
         // creating row
         const trEl = document.createElement('tr');
         trEl.appendChild(idTdEl);
         trEl.appendChild(nameTdEl);
+        trEl.appendChild(albumTdEl);    //append album ele
 
         tbodyEl.appendChild(trEl);
     }
@@ -232,9 +244,154 @@ function createComments(comments) {
     return ulEl;
 }
 
+
+function onLoadAlbums() {
+    const userId = this.getAttribute("data-album-user-id");
+
+    const showAlbumsButtons = document.querySelectorAll("[data-album-user-id]");
+    showAlbumsButtons.forEach(button => {
+        if (button == this) {
+            button.classList.add("active");
+        }
+        else {
+            button.classList.remove("active");
+        }
+    });
+
+    const xhr = new XMLHttpRequest();
+    xhr.addEventListener("load", onAlbumsReceived);
+    xhr.open("GET", BASE_URL + "/albums?userId=" + userId);
+    xhr.send();
+}
+
+function onAlbumsReceived() {
+    postsDivEl.style.display = 'block';
+
+    //remove everything before
+    const divEl = document.getElementById('posts-content');
+    removePostsContent(divEl);
+
+    const albums = JSON.parse(this.responseText);
+
+    const ulEl = document.createElement("ul");
+
+    albums.forEach(album => {
+        const liEl = document.createElement("li");
+        liEl.id = "album" + album.id;
+
+        const pEl = document.createElement("p");
+        const showAlbumBtn = document.createElement("button");
+        showAlbumBtn.dataset.albumId = album.id;
+        showAlbumBtn.innerHTML = "Show photos";
+
+        showAlbumBtn.addEventListener("click", onLoadAlbumPhotos);
+
+        //pEl.textContent = "id: " + album.id + " context: " + album.title;
+        pEl.textContent = "Album: " + album.title;
+
+        liEl.appendChild(pEl);
+        liEl.appendChild(showAlbumBtn);
+        ulEl.appendChild(liEl);
+    });
+
+    divEl.appendChild(ulEl);
+}
+
+function onLoadAlbumPhotos() {
+    const showAlbumButtons = document.querySelectorAll("[data-album-id]");
+    //console.log(showAlbumButtons);
+
+    showAlbumButtons.forEach(button => {
+        if (button == this) {
+            button.classList.add("active");
+        }
+        else {
+            button.classList.remove("active");
+        }
+    });
+
+    const xhr = new XMLHttpRequest();
+    xhr.addEventListener("load", onAlbumPhotosReceived);
+    xhr.open("GET", BASE_URL + "/photos?albumId=" + this.dataset.albumId);
+    xhr.send();
+}
+
+function onAlbumPhotosReceived() {
+    const albumPhotos = JSON.parse(this.responseText);
+    //const parentLiEl = document.querySelector(`[data-album-id="${albumPhotos[0].albumId}"]`).parentNode;
+
+    const parentLiElements = document.querySelectorAll("[data-album-id]");
+
+    //remove everything before
+    parentLiElements.forEach(liEl => {
+        if (liEl.parentNode.querySelector("ul"))
+            liEl.parentNode.querySelector("ul").remove();
+
+        if (liEl.dataset.albumId == albumPhotos[0].albumId) {
+            liEl.parentNode.appendChild(createAlbumPhotos(albumPhotos));
+            location.href = "#album" + albumPhotos[0].albumId;
+        }
+    });
+
+    /* if (parentLiEl.querySelector("ul")) {
+        parentLiEl.removeChild(parentLiEl.querySelector("ul"));
+    } */
+}
+
+function createAlbumPhotos(albumPhotos) {
+    const ulEl = document.createElement("ul");
+    ulEl.id = "photos";
+
+    const divEl = document.createElement("div");
+    divEl.classList.add("image-box");
+
+    albumPhotos.forEach(photo => {
+        const imgEl = document.createElement("img");
+        imgEl.src = photo.thumbnailUrl;
+        imgEl.addEventListener("click", function () {
+            viewImage(photo.url);
+        });
+
+        /* const liEl = document.createElement("li");
+        liEl.appendChild(imgEl); */
+        divEl.appendChild(imgEl);
+        ulEl.appendChild(divEl);
+        //ulEl.appendChild(liEl);
+    });
+
+    return ulEl;
+}
+
+function removePostsContent(divEl) {
+    while (divEl.firstChild) {
+        divEl.removeChild(divEl.firstChild);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', (event) => {
     usersDivEl = document.getElementById('users');
     postsDivEl = document.getElementById('posts');
     loadButtonEl = document.getElementById('load-users');
     loadButtonEl.addEventListener('click', onLoadUsers);
 });
+
+//image viewing
+
+//document.addEventListener("change", viewImage);
+
+function viewImage(src) {
+    const imageModalEl = document.querySelector("#imageModal");
+    imageModalEl.querySelector("img").src = src;
+
+    imageModalEl.style.display = "block";
+
+    imageModalEl.addEventListener("click", function (event) {
+        if (event.target == imageModalEl.querySelector("img")) {
+            console.log("clicked on image");
+        }
+        else {
+            imageModalEl.style.display = "none";
+            console.log("clicked outside");
+        }
+    });
+}
